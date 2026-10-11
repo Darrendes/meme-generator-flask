@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Générateur de Mèmes</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    /* APERÇU */
+    .preview-section { margin-top: 20px; display: none; }
+    .preview-section.visible { display: block; }
+    #preview-canvas {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .preview-label {
+      text-align: center;
+      font-size: 13px;
+      opacity: 0.5;
+      margin-top: 6px;
+    }
+
+    /* ACTIONS CARTE */
+    .meme-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .meme-actions a, .meme-actions button { flex: 1; }
+
+    .download-btn {
+      padding: 10px;
+      border: none;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.3s;
+      text-decoration: none;
+      display: block;
+      text-align: center;
+    }
+    .download-btn:hover { transform: scale(1.02); background: #10b981; }
+
+    .share-label {
+      font-size: 12px;
+      opacity: 0.5;
+      margin: 10px 0 6px;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .share-row { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }
+    .share-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 17px;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .share-btn:hover { transform: translateY(-3px) scale(1.12); box-shadow: 0 8px 20px rgba(0,0,0,0.4); }
+    .share-twitter  { background: #1da1f2; }
+    .share-facebook { background: #1877f2; }
+    .share-whatsapp { background: #25d366; }
+    .share-instagram{ background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+    .share-reddit   { background: #ff4500; }
+    .share-telegram { background: #2ca5e0; }
+
+    .empty-gallery {
+      text-align: center;
+      opacity: 0.4;
+      padding: 40px;
+      grid-column: 1 / -1;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-wrapper">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <p class="flash-message {{ category }}">{{ message }}</p>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- HEADER -->
+    <div class="header">
+      <h1> Générateur de Mèmes</h1>
+      <p>Téléchargez une image, ajoutez du texte, créez votre mème !</p>
+    </div>
+
+    <!-- CREATOR -->
+    <div class="creator">
+      <div class="creator-card">
+        <h2>Créer un mème</h2>
+        <form action="/generate" method="post" enctype="multipart/form-data">
+
+          <div class="upload-box" id="upload-box">
+            <input type="file" name="image" id="image-input" accept="image/*" required>
+            <p id="upload-label">📁 Cliquez pour choisir une image</p>
+          </div>
+
+          <input type="text" name="top_text" id="top_text" placeholder="Texte en haut">
+          <input type="text" name="bottom_text" id="bottom_text" placeholder="Texte en bas">
+
+          <!-- APERÇU EN TEMPS RÉEL -->
+          <div class="preview-section" id="preview-section">
+            <canvas id="preview-canvas"></canvas>
+            <p class="preview-label"> Aperçu </p>
+          </div>
+
+          <button type="submit"> Créer le mème</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- GALLERY -->
+    <div class="gallery">
+      <h2> Galerie</h2>
+      <div class="grid">
+        {% if memes %}
+          {% for meme in memes %}
+          <div class="meme-card">
+            <div class="image-wrapper">
+              <img src="/static/generated/{{ meme.filename }}" alt="meme">
+              <div class="overlay"></div>
+            </div>
+            <div class="meme-content">
+              {% if meme.top_text %}<p class="top">{{ meme.top_text }}</p>{% endif %}
+              {% if meme.bottom_text %}<p class="bottom">{{ meme.bottom_text }}</p>{% endif %}
+
+              <div class="meme-actions">
+                <a class="download-btn" href="/download/{{ meme.id }}">⬇️ Télécharger</a>
+                <form action="/delete/{{ meme.id }}" method="post" style="flex:1">
+                  <button class="delete-btn" type="submit" style="width:100%">🗑️ Supprimer</button>
+                </form>
+              </div>
+
+              <!-- PARTAGE RÉSEAUX SOCIAUX -->
+              <p class="share-label">Partager</p>
+              <div class="share-row">
+                <a class="share-btn share-twitter"
+                   href="https://twitter.com/intent/tweet?text=Regarde+mon+mème+!&url={{ request.host_url }}static/generated/{{ meme.filename }}"
+                   target="_blank" title="Twitter / X"><i class="fa-brands fa-x-twitter"></i></a>
+                <a class="share-btn share-facebook"
+                   href="https://www.facebook.com/sharer/sharer.php?u={{ request.host_url }}static/generated/{{ meme.filename }}"
+                   target="_blank" title="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                <a class="share-btn share-whatsapp"
+                   href="https://wa.me/?text=Regarde+mon+mème+!+{{ request.host_url }}static/generated/{{ meme.filename }}"
+                   target="_blank" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+                <a class="share-btn share-instagram"
+                   href="https://www.instagram.com/" target="_blank" title="Instagram"><i class="fa-brands fa-instagram"></i></a>
+                <a class="share-btn share-reddit"
+                   href="https://www.reddit.com/submit?url={{ request.host_url }}static/generated/{{ meme.filename }}&title=Mon+mème"
+                   target="_blank" title="Reddit"><i class="fa-brands fa-reddit-alien"></i></a>
+                <a class="share-btn share-telegram"
+                   href="https://t.me/share/url?url={{ request.host_url }}static/generated/{{ meme.filename }}&text=Regarde+mon+mème+!"
+                   target="_blank" title="Telegram"><i class="fa-brands fa-telegram"></i></a>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-gallery">
+            <p>Aucun mème créé pour l'instant.<br>Commencez par en créer un !</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const imageInput = document.getElementById('image-input');
+    const topInput = document.getElementById('top_text');
+    const bottomInput = document.getElementById('bottom_text');
+    const canvas = document.getElementById('preview-canvas');
+    const ctx = canvas.getContext('2d');
+    const previewSection = document.getElementById('preview-section');
+    const uploadLabel = document.getElementById('upload-label');
+
+    let currentImage = null;
+
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      uploadLabel.textContent = '✅ ' + file.name;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          currentImage = img;
+          previewSection.classList.add('visible');
+          renderPreview();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    topInput.addEventListener('input', renderPreview);
+    bottomInput.addEventListener('input', renderPreview);
+
+    function renderPreview() {
+      if (!currentImage) return;
+
+      const maxW = 560;
+      const ratio = currentImage.height / currentImage.width;
+      canvas.width = maxW;
+      canvas.height = maxW * ratio;
+
+      ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
+
+      const fontSize = Math.max(24, Math.floor(canvas.width / 12));
+      ctx.font = `bold ${fontSize}px Impact, Arial Black, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'white';
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = fontSize / 8;
+
+      if (topInput.value) {
+        const txt = topInput.value.toUpperCase();
+        ctx.strokeText(txt, canvas.width / 2, fontSize + 10);
+        ctx.fillText(txt, canvas.width / 2, fontSize + 10);
+      }
+
+      if (bottomInput.value) {
+        const txt = bottomInput.value.toUpperCase();
+        ctx.strokeText(txt, canvas.width / 2, canvas.height - 15);
+        ctx.fillText(txt, canvas.width / 2, canvas.height - 15);
+      }
+    }
+  </script>
+</body>
+</html>
